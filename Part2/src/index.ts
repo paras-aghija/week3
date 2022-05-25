@@ -27,8 +27,8 @@ interface Ciphertext {
 
 // An EdDSA signature.
 interface Signature {
-  R8: BigInt[];
-  S: BigInt;
+  R8: bigint[];
+  S: bigint;
 }
 
 interface EdDSA {
@@ -57,9 +57,9 @@ const NOTHING_UP_MY_SLEEVE =
   ) % SNARK_FIELD_SIZE;
 
 /*
- * Convert a BigInt to a Buffer
+ * Convert a bigint to a Buffer
  */
-const bigInt2Buffer = (i: BigInt): Buffer => {
+const bigint2Buffer = (i: bigint): Buffer => {
   let hexStr = i.toString(16);
   while (hexStr.length < 64) {
     hexStr = '0' + hexStr;
@@ -69,10 +69,10 @@ const bigInt2Buffer = (i: BigInt): Buffer => {
 // The pubkey is the first Pedersen base point from iden3's circomlib
 // See https://github.com/iden3/circomlib/blob/d5ed1c3ce4ca137a6b3ca48bec4ac12c1b38957a/src/pedersen_printbases.js
 const NOTHING_UP_MY_SLEEVE_PUBKEY: PubKey = [
-  bigInt2Buffer(
+  bigint2Buffer(
     10457101036533406547632367118273992217979173478358440826365724437999023779287n,
   ),
-  bigInt2Buffer(
+  bigint2Buffer(
     19824078218392094440610104313265183977899662750282163392862422243483260492317n,
   ),
 ];
@@ -98,7 +98,7 @@ type TypedArray =
  * @param buf
  * @returns bigint
  */
-const buf2Bigint = (buf: ArrayBuffer | TypedArray | Buffer): bigint => {
+const buf2bigint = (buf: ArrayBuffer | TypedArray | Buffer): bigint => {
   let bits = 8n;
   if (ArrayBuffer.isView(buf)) bits = BigInt(buf.BYTES_PER_ELEMENT * 8);
   else buf = new Uint8Array(buf);
@@ -126,7 +126,7 @@ const buildEddsaModule = async (): Promise<EdDSA> => {
  */
 const genRandomBabyJubValue = (): bigint => {
   // Prevent modulo bias
-  //const lim = BigInt('0x10000000000000000000000000000000000000000000000000000000000000000')
+  //const lim = bigint('0x10000000000000000000000000000000000000000000000000000000000000000')
   //const min = (lim - SNARK_FIELD_SIZE) % SNARK_FIELD_SIZE
   const min = BigInt(
     '6350874878119819312338956282401532410528162663560392320966563075034087161851',
@@ -239,6 +239,16 @@ const encrypt = async (
 ): Promise<Ciphertext> => {
   const mimc7 = await buildMimc7();
   // [assignment] generate the IV, use Mimc7 to hash the shared key with the IV, then encrypt the plain text
+  const iv = mimc7.getIV(plaintext);
+  const ciphertext: Ciphertext = {
+    iv,
+    data: plaintext.map((e: bigint, i: number): bigint => {
+      console.log(mimc7.hash(sharedKey, BigInt(iv) + BigInt(i)));
+      return BigInt(e) + buf2bigint(mimc7.hash(sharedKey, BigInt(iv) + BigInt(i)))
+    }),
+  }
+  console.log(ciphertext);
+  return ciphertext
 };
 
 /*
@@ -250,11 +260,17 @@ const decrypt = async (
   sharedKey: EcdhSharedKey,
 ): Promise<Plaintext> => {
   // [assignment] use Mimc7 to hash the shared key with the IV, then descrypt the ciphertext
+  const mimc7 = await buildMimc7();
+  const plaintext = ciphertext.data.map((e: bigint, i: number): bigint => {
+    return BigInt(e) - buf2bigint(mimc7.hash(sharedKey, BigInt(ciphertext.iv) + BigInt(i)))
+  })
+  console.log(plaintext);
+  return plaintext;
 };
 
 export {
   buildEddsaModule,
-  buf2Bigint,
+  buf2bigint,
   genPrivKey,
   genPubKey,
   genKeypair,
@@ -274,7 +290,7 @@ export {
   NOTHING_UP_MY_SLEEVE,
   NOTHING_UP_MY_SLEEVE_PUBKEY,
   SNARK_FIELD_SIZE,
-  bigInt2Buffer,
+  bigint2Buffer,
   packPubKey,
   unpackPubKey,
 };
